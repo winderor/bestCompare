@@ -851,7 +851,7 @@ private:
         ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
         ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY |
         ImGuiTableFlags_SizingFixedFit;
-    float tableHeight = viewport->WorkSize.y - 215.0f;
+    float tableHeight = viewport->WorkSize.y - 260.0f;
 
     if (ImGui::BeginTable("DiffTreeTable", 4, tableFlags,
                           ImVec2(0.0f, tableHeight))) {
