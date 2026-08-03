@@ -772,7 +772,12 @@ private:
       }
     }
 
+    ImGui::Columns(1);
+    ImGui::Spacing();
+
     ImGui::Columns(2, "FilterColumns", false);
+    ImGui::SetColumnWidth(0, viewport->WorkSize.x * 0.48f);
+
     ImGui::TextUnformatted("Include File Types (default * or e.g. *.cpp, *.hpp):");
     ImGui::PushItemWidth(-1.0f);
     ImGui::InputText("##IncludePatterns", state.includePatterns, sizeof(state.includePatterns));
