@@ -277,41 +277,26 @@ private:
         state.statusMessage = "[SCANNING] Scanning local & remote file trees in parallel...";
       }
 
-      // Helper to update live UI tree from partial local & remote scan results
-      auto updateLiveTree = [this, &state, &localRes, &remoteRes]() {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        if (!localRes.nodes.empty() || !remoteRes.nodes.empty()) {
-          state.diffItems = DiffEngine::Compare(localRes, remoteRes);
-          state.rootNode = TreeNode::BuildTree(state.diffItems);
-        }
-      };
-
-      // Launch local scan and remote network scan concurrently in parallel with progressive tree updates
-      std::thread localThread([this, &state, localP, &localRes, updateLiveTree, fastScan, ignoreFilter]() {
-        localRes = DirectoryScanner::ScanDirectory(localP, [this, &state, updateLiveTree](size_t files, size_t dirs, uint64_t bytes, const std::wstring& currentItem) {
+      // Launch local scan and remote network scan concurrently in parallel
+      std::thread localThread([this, &state, localP, &localRes, fastScan, ignoreFilter]() {
+        localRes = DirectoryScanner::ScanDirectory(localP, [this, &state](size_t files, size_t dirs, uint64_t bytes, const std::wstring& currentItem) {
           std::string narrowItem = WStringFormatToUTF8(currentItem);
           (void)bytes;
-          {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            state.statusMessage = "[LOCAL SCANNING] Files: " + std::to_string(files) + ", Dirs: " + std::to_string(dirs) + " | Current: " + narrowItem;
-          }
-          updateLiveTree();
+          std::lock_guard<std::mutex> lock(m_mutex);
+          state.statusMessage = "[LOCAL SCANNING] Files: " + std::to_string(files) + ", Dirs: " + std::to_string(dirs) + " | Current: " + narrowItem;
         }, &state.cancelScan, fastScan, ignoreFilter);
       });
 
-      std::thread remoteThread([this, &state, ip, remoteP, &remoteRes, updateLiveTree, fastScan, ignoreFilter]() {
-        remoteRes = NetworkClient::RequestRemoteScan(ip, remoteP, [this, &state, updateLiveTree](size_t files, size_t dirs, uint64_t bytes, const std::wstring& currentItem) {
+      std::thread remoteThread([this, &state, ip, remoteP, &remoteRes, fastScan, ignoreFilter]() {
+        remoteRes = NetworkClient::RequestRemoteScan(ip, remoteP, [this, &state](size_t files, size_t dirs, uint64_t bytes, const std::wstring& currentItem) {
           std::string narrowItem = WStringFormatToUTF8(currentItem);
           (void)bytes;
-          {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            state.statusMessage = "[REMOTE SCANNING] Files: " + std::to_string(files) + ", Dirs: " + std::to_string(dirs) + " | Current: " + narrowItem;
-          }
-          updateLiveTree();
+          std::lock_guard<std::mutex> lock(m_mutex);
+          state.statusMessage = "[REMOTE SCANNING] Files: " + std::to_string(files) + ", Dirs: " + std::to_string(dirs) + " | Current: " + narrowItem;
         }, &state.cancelScan, fastScan, ignoreFilter);
       });
 
-      // Synchronize parallel scanning threads
+      // Synchronize parallel scanning threads (Wait until both sides finish scanning)
       localThread.join();
       remoteThread.join();
 
@@ -322,8 +307,13 @@ private:
         return;
       }
 
-      // Final complete comparison and tree build
-      updateLiveTree();
+      // Build complete tree and compare only when both sides have finished scanning
+      {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        state.statusMessage = "[COMPARING] Parallel scan complete. Synchronizing side-by-side comparison tree...";
+        state.diffItems = DiffEngine::Compare(localRes, remoteRes);
+        state.rootNode = TreeNode::BuildTree(state.diffItems);
+      }
       auto end = std::chrono::high_resolution_clock::now();
 
       std::lock_guard<std::mutex> lock(m_mutex);
