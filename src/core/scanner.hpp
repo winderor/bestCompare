@@ -126,13 +126,22 @@ public:
             std::wstring fullPath = entry.path().wstring();
 
             std::wstring relPath = L"";
-            if (fullPath.rfind(normalizedRoot, 0) == 0) {
+            std::error_code relEc;
+            fs::path relP = fs::relative(entry.path(), rootPath, relEc);
+            if (!relEc && !relP.empty()) {
+                relPath = relP.wstring();
+            } else if (fullPath.rfind(normalizedRoot, 0) == 0) {
                 relPath = fullPath.substr(normalizedRoot.length());
                 if (!relPath.empty() && (relPath[0] == L'\\' || relPath[0] == L'/')) {
                     relPath = relPath.substr(1);
                 }
             } else {
                 relPath = filename;
+            }
+
+            // Normalize all directory separators to forward slash '/' for cross-machine comparison
+            for (auto& ch : relPath) {
+                if (ch == L'\\') ch = L'/';
             }
 
             bool isDir = entry.is_directory(ec);

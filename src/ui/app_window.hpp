@@ -493,7 +493,8 @@ private:
   }
 
   void RenderContextMenu(GUIState &state,
-                         const std::shared_ptr<TreeNode> &child) {
+                         const std::shared_ptr<TreeNode> &child,
+                         bool isRightColumn) {
     if (ImGui::BeginPopupContextItem()) {
       if (!state.selectedPaths.count(child->relativePath)) {
         state.selectedPaths.clear();
@@ -506,16 +507,8 @@ private:
       ImGui::Separator();
 
       if (ImGui::MenuItem("Copy Path")) {
-        std::string narrowPath = WStringFormatToUTF8(child->relativePath);
-        ImGui::SetClipboardText(narrowPath.c_str());
-      }
-      if (ImGui::MenuItem("Copy Full Local Path")) {
-        fs::path fullP = fs::path(state.localPath) / child->relativePath;
-        std::string narrowPath = WStringFormatToUTF8(fullP.wstring());
-        ImGui::SetClipboardText(narrowPath.c_str());
-      }
-      if (ImGui::MenuItem("Copy Full Remote Path")) {
-        fs::path fullP = fs::path(state.remotePath) / child->relativePath;
+        fs::path baseRoot = isRightColumn ? fs::path(state.remotePath) : fs::path(state.localPath);
+        fs::path fullP = baseRoot / child->relativePath;
         std::string narrowPath = WStringFormatToUTF8(fullP.wstring());
         ImGui::SetClipboardText(narrowPath.c_str());
       }
@@ -646,7 +639,7 @@ private:
       }
 
       // Right click context menu on Local Column
-      RenderContextMenu(state, child);
+      RenderContextMenu(state, child, false);
 
       // Column 1: Status Badge
       ImGui::TableSetColumnIndex(1);
@@ -708,7 +701,7 @@ private:
             state.selectionAnchorPath = child->relativePath;
           }
         }
-        RenderContextMenu(state, child);
+        RenderContextMenu(state, child, true);
       } else {
         ImGui::TextDisabled("-");
       }
