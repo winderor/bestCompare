@@ -719,9 +719,9 @@ private:
         ImGui::Text("%s / %s B", leftSize.c_str(), rightSize.c_str());
       }
 
-      // Recurse into subfolders if expanded
+      // Recurse into subfolders only if explicitly expanded by the user
       if (isOpen) {
-        if (child->isDirectory && !child->children.empty()) {
+        if (child->isDirectory && !child->children.empty() && child->isExpanded) {
           RenderTreeNodesRecursive(state, child);
         }
         ImGui::TreePop();
