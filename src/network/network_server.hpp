@@ -112,10 +112,18 @@ private:
             } else if (header.type == MessageType::StartScanRequest || header.type == MessageType::StartFastScanRequest) {
                 bool isFastScan = (header.type == MessageType::StartFastScanRequest);
                 m_cancelCurrentScan = false;
-                // Read requested path
+                // Read requested path and optional ignore filter
                 std::vector<wchar_t> pathBuffer(header.payloadLength / sizeof(wchar_t));
                 recv(clientSocket, reinterpret_cast<char*>(pathBuffer.data()), header.payloadLength, 0);
-                std::wstring targetPath(pathBuffer.data(), pathBuffer.size());
+                std::wstring fullPayload(pathBuffer.data(), pathBuffer.size());
+
+                std::wstring targetPath = fullPayload;
+                std::wstring ignoreFilter = L"";
+                size_t nlPos = fullPayload.find(L'\n');
+                if (nlPos != std::wstring::npos) {
+                    targetPath = fullPayload.substr(0, nlPos);
+                    ignoreFilter = fullPayload.substr(nlPos + 1);
+                }
 
                 std::string narrowTarget;
                 if (!targetPath.empty()) {
@@ -179,7 +187,7 @@ private:
                     if (progData.itemLength > 0) {
                         send(clientSocket, reinterpret_cast<const char*>(currentItem.data()), progData.itemLength, 0);
                     }
-                }, &m_cancelCurrentScan, isFastScan);
+                }, &m_cancelCurrentScan, isFastScan, ignoreFilter);
 
                 if (m_cancelCurrentScan) {
                     if (m_reporter) {

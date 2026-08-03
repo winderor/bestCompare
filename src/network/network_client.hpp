@@ -136,20 +136,23 @@ public:
         return (bytes == sizeof(PacketHeader) && resp.type == MessageType::FileOpResponse);
     }
 
-    static DirectoryScanResult RequestRemoteScan(const std::string& remoteIp, const std::wstring& remotePath, ProgressCallback progressCb = nullptr, std::atomic<bool>* cancelFlag = nullptr, bool fastScan = false, unsigned short port = 9090) {
+    static DirectoryScanResult RequestRemoteScan(const std::string& remoteIp, const std::wstring& remotePath, ProgressCallback progressCb = nullptr, std::atomic<bool>* cancelFlag = nullptr, bool fastScan = false, const std::wstring& ignoreFilter = L"", unsigned short port = 9090) {
         DirectoryScanResult result;
         result.rootPath = remotePath;
 
         SOCKET clientSocket = ConnectToRemote(remoteIp, port, cancelFlag);
         if (clientSocket == INVALID_SOCKET) return result;
 
+        // Combine remote path and ignore filter string separated by \n character
+        std::wstring payloadStr = remotePath + L"\n" + ignoreFilter;
+
         // Send start scan request (full or fast)
         PacketHeader scanHeader{};
         scanHeader.type = fastScan ? MessageType::StartFastScanRequest : MessageType::StartScanRequest;
-        scanHeader.payloadLength = static_cast<uint32_t>(remotePath.length() * sizeof(wchar_t));
+        scanHeader.payloadLength = static_cast<uint32_t>(payloadStr.length() * sizeof(wchar_t));
 
         send(clientSocket, reinterpret_cast<char*>(&scanHeader), sizeof(PacketHeader), 0);
-        send(clientSocket, reinterpret_cast<const char*>(remotePath.data()), scanHeader.payloadLength, 0);
+        send(clientSocket, reinterpret_cast<const char*>(payloadStr.data()), scanHeader.payloadLength, 0);
 
         // Read incoming packet headers (ScanProgressUpdate packets or NodeDataChunk header)
         while (true) {

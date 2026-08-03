@@ -36,7 +36,42 @@ class DirectoryScanner {
 public:
     using ProgressCallback = std::function<void(size_t filesScanned, size_t dirsScanned, uint64_t bytesScanned, const std::wstring& currentItem)>;
 
-    static DirectoryScanResult ScanDirectory(const std::wstring& rootPath, ProgressCallback progressCb = nullptr, std::atomic<bool>* cancelFlag = nullptr, bool fastScan = false) {
+    static bool ShouldIgnore(const std::wstring& relPath, const std::wstring& filename, const std::wstring& ignoreFilter) {
+        if (ignoreFilter.empty()) return false;
+
+        std::wstringstream ss(ignoreFilter);
+        std::wstring pattern;
+        while (std::getline(ss, pattern, L',')) {
+            // Trim whitespace
+            size_t first = pattern.find_first_not_of(L" \t");
+            if (first == std::wstring::npos) continue;
+            size_t last = pattern.find_last_of(L" \t");
+            pattern = pattern.substr(first, (last == std::wstring::npos || last < first) ? std::wstring::npos : (last - first + 1));
+            if (pattern.empty()) continue;
+
+            // Lowercase string conversion for case-insensitive pattern matching
+            std::wstring targetName = filename;
+            std::wstring pat = pattern;
+            for (auto& c : targetName) c = towlower(c);
+            for (auto& c : pat) c = towlower(c);
+
+            // Extension match (*.db, *.tmp, *.bak)
+            if (pat.length() > 1 && pat[0] == L'*' && pat[1] == L'.') {
+                std::wstring ext = pat.substr(1); // e.g. ".db"
+                if (targetName.length() >= ext.length() &&
+                    targetName.compare(targetName.length() - ext.length(), ext.length(), ext) == 0) {
+                    return true;
+                }
+            }
+            // Direct substring/name match (e.g. .git, thumbs.db)
+            else if (targetName == pat || relPath.find(pat) != std::wstring::npos) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static DirectoryScanResult ScanDirectory(const std::wstring& rootPath, ProgressCallback progressCb = nullptr, std::atomic<bool>* cancelFlag = nullptr, bool fastScan = false, const std::wstring& ignoreFilter = L"") {
         DirectoryScanResult result;
         result.rootPath = rootPath;
 
@@ -54,18 +89,26 @@ public:
             if (cancelFlag && cancelFlag->load()) {
                 break;
             }
-            FileNode node;
-            std::wstring fullPath = entry.path().wstring();
             
-            // Calculate relative path
+            std::wstring filename = entry.path().filename().wstring();
+            std::wstring fullPath = entry.path().wstring();
+
+            std::wstring relPath = L"";
             if (fullPath.rfind(normalizedRoot, 0) == 0) {
-                node.relativePath = fullPath.substr(normalizedRoot.length());
-                if (!node.relativePath.empty() && (node.relativePath[0] == L'\\' || node.relativePath[0] == L'/')) {
-                    node.relativePath = node.relativePath.substr(1);
+                relPath = fullPath.substr(normalizedRoot.length());
+                if (!relPath.empty() && (relPath[0] == L'\\' || relPath[0] == L'/')) {
+                    relPath = relPath.substr(1);
                 }
             } else {
-                node.relativePath = entry.path().filename().wstring();
+                relPath = filename;
             }
+
+            if (ShouldIgnore(relPath, filename, ignoreFilter)) {
+                continue;
+            }
+
+            FileNode node;
+            node.relativePath = relPath;
 
             node.isDirectory = entry.is_directory(ec);
 
