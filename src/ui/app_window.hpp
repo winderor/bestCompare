@@ -573,14 +573,12 @@ private:
           ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_OpenOnArrow;
       if (isSelected)
         flags |= ImGuiTreeNodeFlags_Selected;
-      if (child->isExpanded)
-        flags |= ImGuiTreeNodeFlags_DefaultOpen;
       if (!child->isDirectory || child->children.empty()) {
         flags |= ImGuiTreeNodeFlags_Leaf;
       }
 
-      // Set Next Item Open State explicitly if button was clicked
-      if (clickedToggle) {
+      // Always synchronize ImGui internal open state with child->isExpanded
+      if (child->isDirectory && !child->children.empty()) {
         ImGui::SetNextItemOpen(child->isExpanded);
       }
 
@@ -592,7 +590,7 @@ private:
         ImGui::TreeNodeEx((void *)child.get(), flags | ImGuiTreeNodeFlags_NoTreePushOnOpen, "%s", "-");
       }
 
-      if (child->isDirectory && !child->children.empty() && !clickedToggle) {
+      if (child->isDirectory && !child->children.empty()) {
         child->isExpanded = isOpen;
       }
 
