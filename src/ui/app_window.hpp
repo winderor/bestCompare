@@ -505,6 +505,22 @@ private:
       ImGui::TextDisabled("%s", itemLabel.c_str());
       ImGui::Separator();
 
+      if (ImGui::MenuItem("Copy Path")) {
+        std::string narrowPath = WStringFormatToUTF8(child->relativePath);
+        ImGui::SetClipboardText(narrowPath.c_str());
+      }
+      if (ImGui::MenuItem("Copy Full Local Path")) {
+        fs::path fullP = fs::path(state.localPath) / child->relativePath;
+        std::string narrowPath = WStringFormatToUTF8(fullP.wstring());
+        ImGui::SetClipboardText(narrowPath.c_str());
+      }
+      if (ImGui::MenuItem("Copy Full Remote Path")) {
+        fs::path fullP = fs::path(state.remotePath) / child->relativePath;
+        std::string narrowPath = WStringFormatToUTF8(fullP.wstring());
+        ImGui::SetClipboardText(narrowPath.c_str());
+      }
+      ImGui::Separator();
+
       if (ImGui::MenuItem("Copy Left ---> Right")) {
         ExecuteBatchCopyLeftToRight(state);
       }
