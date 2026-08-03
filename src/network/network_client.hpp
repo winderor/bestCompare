@@ -136,15 +136,15 @@ public:
         return (bytes == sizeof(PacketHeader) && resp.type == MessageType::FileOpResponse);
     }
 
-    static DirectoryScanResult RequestRemoteScan(const std::string& remoteIp, const std::wstring& remotePath, ProgressCallback progressCb = nullptr, std::atomic<bool>* cancelFlag = nullptr, bool fastScan = false, const std::wstring& ignoreFilter = L"", unsigned short port = 9090) {
+    static DirectoryScanResult RequestRemoteScan(const std::string& remoteIp, const std::wstring& remotePath, ProgressCallback progressCb = nullptr, std::atomic<bool>* cancelFlag = nullptr, bool fastScan = false, const std::wstring& ignoreFilter = L"", const std::wstring& includeFilter = L"*", unsigned short port = 9090) {
         DirectoryScanResult result;
         result.rootPath = remotePath;
 
         SOCKET clientSocket = ConnectToRemote(remoteIp, port, cancelFlag);
         if (clientSocket == INVALID_SOCKET) return result;
 
-        // Combine remote path and ignore filter string separated by \n character
-        std::wstring payloadStr = remotePath + L"\n" + ignoreFilter;
+        // Combine remote path, ignore filter, and include filter separated by \n character
+        std::wstring payloadStr = remotePath + L"\n" + ignoreFilter + L"\n" + includeFilter;
 
         // Send start scan request (full or fast)
         PacketHeader scanHeader{};

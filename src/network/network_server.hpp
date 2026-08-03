@@ -119,10 +119,18 @@ private:
 
                 std::wstring targetPath = fullPayload;
                 std::wstring ignoreFilter = L"";
-                size_t nlPos = fullPayload.find(L'\n');
-                if (nlPos != std::wstring::npos) {
-                    targetPath = fullPayload.substr(0, nlPos);
-                    ignoreFilter = fullPayload.substr(nlPos + 1);
+                std::wstring includeFilter = L"*";
+                size_t nlPos1 = fullPayload.find(L'\n');
+                if (nlPos1 != std::wstring::npos) {
+                    targetPath = fullPayload.substr(0, nlPos1);
+                    std::wstring rest = fullPayload.substr(nlPos1 + 1);
+                    size_t nlPos2 = rest.find(L'\n');
+                    if (nlPos2 != std::wstring::npos) {
+                        ignoreFilter = rest.substr(0, nlPos2);
+                        includeFilter = rest.substr(nlPos2 + 1);
+                    } else {
+                        ignoreFilter = rest;
+                    }
                 }
 
                 std::string narrowTarget;
@@ -187,7 +195,7 @@ private:
                     if (progData.itemLength > 0) {
                         send(clientSocket, reinterpret_cast<const char*>(currentItem.data()), progData.itemLength, 0);
                     }
-                }, &m_cancelCurrentScan, isFastScan, ignoreFilter);
+                }, &m_cancelCurrentScan, isFastScan, ignoreFilter, includeFilter);
 
                 if (m_cancelCurrentScan) {
                     if (m_reporter) {

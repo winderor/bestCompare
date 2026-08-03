@@ -71,7 +71,38 @@ public:
         return false;
     }
 
-    static DirectoryScanResult ScanDirectory(const std::wstring& rootPath, ProgressCallback progressCb = nullptr, std::atomic<bool>* cancelFlag = nullptr, bool fastScan = false, const std::wstring& ignoreFilter = L"") {
+    static bool MatchesInclude(const std::wstring& relPath, const std::wstring& filename, bool isDirectory, const std::wstring& includeFilter) {
+        if (isDirectory) return true; // Always allow traversing directory hierarchy
+        if (includeFilter.empty() || includeFilter == L"*") return true;
+
+        std::wstringstream ss(includeFilter);
+        std::wstring pattern;
+        while (std::getline(ss, pattern, L',')) {
+            size_t first = pattern.find_first_not_of(L" \t");
+            if (first == std::wstring::npos) continue;
+            size_t last = pattern.find_last_of(L" \t");
+            pattern = pattern.substr(first, (last == std::wstring::npos || last < first) ? std::wstring::npos : (last - first + 1));
+            if (pattern.empty() || pattern == L"*") return true;
+
+            std::wstring targetName = filename;
+            std::wstring pat = pattern;
+            for (auto& c : targetName) c = towlower(c);
+            for (auto& c : pat) c = towlower(c);
+
+            if (pat.length() > 1 && pat[0] == L'*' && pat[1] == L'.') {
+                std::wstring ext = pat.substr(1); // e.g. ".cpp"
+                if (targetName.length() >= ext.length() &&
+                    targetName.compare(targetName.length() - ext.length(), ext.length(), ext) == 0) {
+                    return true;
+                }
+            } else if (targetName == pat || relPath.find(pat) != std::wstring::npos) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static DirectoryScanResult ScanDirectory(const std::wstring& rootPath, ProgressCallback progressCb = nullptr, std::atomic<bool>* cancelFlag = nullptr, bool fastScan = false, const std::wstring& ignoreFilter = L"", const std::wstring& includeFilter = L"*") {
         (void)fastScan;
         DirectoryScanResult result;
         result.rootPath = rootPath;
@@ -104,14 +135,19 @@ public:
                 relPath = filename;
             }
 
+            bool isDir = entry.is_directory(ec);
+
             if (ShouldIgnore(relPath, filename, ignoreFilter)) {
+                continue;
+            }
+
+            if (!MatchesInclude(relPath, filename, isDir, includeFilter)) {
                 continue;
             }
 
             FileNode node;
             node.relativePath = relPath;
-
-            node.isDirectory = entry.is_directory(ec);
+            node.isDirectory = isDir;
 
             if (node.isDirectory) {
                 result.totalDirectories++;

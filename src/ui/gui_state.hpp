@@ -26,6 +26,7 @@ struct GUIState : public IGUIStateReporter {
     char remoteIp[128] = "10.100.102.91";
     char remotePath[512] = "D:\\test";
     char ignorePatterns[256] = "*.db, *.tmp, .git";
+    char includePatterns[256] = "*";
     
     bool isScanning = false;
     std::atomic<bool> cancelScan{false};

@@ -4,8 +4,8 @@
 namespace BestCompare {
     static constexpr int VERSION_MAJOR = 0;
     static constexpr int VERSION_MINOR = 1;
-    static constexpr int BUILD_NUMBER = 41;
-    static constexpr float AppVersion = 0.51f;
+    static constexpr int BUILD_NUMBER = 42;
+    static constexpr float AppVersion = 0.52f;
 }
 
 #endif // BESTCOMPARE_VERSION_HPP

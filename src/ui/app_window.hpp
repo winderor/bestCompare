@@ -266,6 +266,8 @@ private:
       std::wstring remoteP(remotePStr.begin(), remotePStr.end());
       std::string ignoreStr(state.ignorePatterns);
       std::wstring ignoreFilter(ignoreStr.begin(), ignoreStr.end());
+      std::string includeStr(state.includePatterns);
+      std::wstring includeFilter(includeStr.begin(), includeStr.end());
 
       auto start = std::chrono::high_resolution_clock::now();
 
@@ -278,22 +280,22 @@ private:
       }
 
       // Launch local scan and remote network scan concurrently in parallel
-      std::thread localThread([this, &state, localP, &localRes, fastScan, ignoreFilter]() {
+      std::thread localThread([this, &state, localP, &localRes, fastScan, ignoreFilter, includeFilter]() {
         localRes = DirectoryScanner::ScanDirectory(localP, [this, &state](size_t files, size_t dirs, uint64_t bytes, const std::wstring& currentItem) {
           std::string narrowItem = WStringFormatToUTF8(currentItem);
           (void)bytes;
           std::lock_guard<std::mutex> lock(m_mutex);
           state.statusMessage = "[LOCAL SCANNING] Files: " + std::to_string(files) + ", Dirs: " + std::to_string(dirs) + " | Current: " + narrowItem;
-        }, &state.cancelScan, fastScan, ignoreFilter);
+        }, &state.cancelScan, fastScan, ignoreFilter, includeFilter);
       });
 
-      std::thread remoteThread([this, &state, ip, remoteP, &remoteRes, fastScan, ignoreFilter]() {
+      std::thread remoteThread([this, &state, ip, remoteP, &remoteRes, fastScan, ignoreFilter, includeFilter]() {
         remoteRes = NetworkClient::RequestRemoteScan(ip, remoteP, [this, &state](size_t files, size_t dirs, uint64_t bytes, const std::wstring& currentItem) {
           std::string narrowItem = WStringFormatToUTF8(currentItem);
           (void)bytes;
           std::lock_guard<std::mutex> lock(m_mutex);
           state.statusMessage = "[REMOTE SCANNING] Files: " + std::to_string(files) + ", Dirs: " + std::to_string(dirs) + " | Current: " + narrowItem;
-        }, &state.cancelScan, fastScan, ignoreFilter);
+        }, &state.cancelScan, fastScan, ignoreFilter, includeFilter);
       });
 
       // Synchronize parallel scanning threads (Wait until both sides finish scanning)
@@ -770,14 +772,20 @@ private:
       }
     }
 
-    ImGui::Columns(1);
-    ImGui::Spacing();
+    ImGui::Columns(2, "FilterColumns", false);
+    ImGui::TextUnformatted("Include File Types (default * or e.g. *.cpp, *.hpp):");
+    ImGui::PushItemWidth(-1.0f);
+    ImGui::InputText("##IncludePatterns", state.includePatterns, sizeof(state.includePatterns));
+    ImGui::PopItemWidth();
 
-    ImGui::TextUnformatted("Ignore Patterns (comma separated, e.g. *.db, *.tmp, .git):");
+    ImGui::NextColumn();
+
+    ImGui::TextUnformatted("Ignore Patterns (e.g. *.db, *.tmp, .git):");
     ImGui::PushItemWidth(-1.0f);
     ImGui::InputText("##IgnorePatterns", state.ignorePatterns, sizeof(state.ignorePatterns));
     ImGui::PopItemWidth();
 
+    ImGui::Columns(1);
     ImGui::Spacing();
 
     // Top Toolbar: Compare & Action Buttons (Applies to Selected Items)
