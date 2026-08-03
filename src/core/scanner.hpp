@@ -72,6 +72,7 @@ public:
     }
 
     static DirectoryScanResult ScanDirectory(const std::wstring& rootPath, ProgressCallback progressCb = nullptr, std::atomic<bool>* cancelFlag = nullptr, bool fastScan = false, const std::wstring& ignoreFilter = L"") {
+        (void)fastScan;
         DirectoryScanResult result;
         result.rootPath = rootPath;
 
