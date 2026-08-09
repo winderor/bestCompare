@@ -368,17 +368,27 @@ private:
         }
 
         fs::path localSrc = localRoot / relPath;
-        if (NetworkClient::RequestRemoteCopyFile(ip, remoteRootStr, relPath, localSrc, true))
+        if (NetworkClient::RequestRemoteCopyFile(ip, remoteRootStr, relPath, localSrc, true)) {
           count++;
+          std::lock_guard<std::mutex> lock(m_mutex);
+          for (auto &item : state.diffItems) {
+            if (item.relativePath == relPath) {
+              item.hasRight = true;
+              item.status = DiffStatus::Equal;
+              break;
+            }
+          }
+        }
       }
 
       {
         std::lock_guard<std::mutex> lock(m_mutex);
-        state.statusMessage = "Copied " + std::to_string(count) + " / " + std::to_string(total) + " items [Left -> Right]. Refreshing scan...";
+        state.rootNode = TreeNode::BuildTree(state.diffItems);
+        state.statusMessage = "Copied " + std::to_string(count) + " / " + std::to_string(total) + " items [Left -> Right].";
       }
 
       state.activeOperation = false;
-      StartAsyncCompare(state, true);
+      state.isScanning = false;
     }).detach();
   }
 
@@ -406,17 +416,27 @@ private:
         }
 
         fs::path localDst = localRoot / relPath;
-        if (NetworkClient::RequestRemoteCopyFile(ip, remoteRootStr, relPath, localDst, false))
+        if (NetworkClient::RequestRemoteCopyFile(ip, remoteRootStr, relPath, localDst, false)) {
           count++;
+          std::lock_guard<std::mutex> lock(m_mutex);
+          for (auto &item : state.diffItems) {
+            if (item.relativePath == relPath) {
+              item.hasLeft = true;
+              item.status = DiffStatus::Equal;
+              break;
+            }
+          }
+        }
       }
 
       {
         std::lock_guard<std::mutex> lock(m_mutex);
-        state.statusMessage = "Copied " + std::to_string(count) + " / " + std::to_string(total) + " items [Right -> Left]. Refreshing scan...";
+        state.rootNode = TreeNode::BuildTree(state.diffItems);
+        state.statusMessage = "Copied " + std::to_string(count) + " / " + std::to_string(total) + " items [Right -> Left].";
       }
 
       state.activeOperation = false;
-      StartAsyncCompare(state, true);
+      state.isScanning = false;
     }).detach();
   }
 
@@ -442,17 +462,31 @@ private:
         }
 
         fs::path target = localRoot / relPath;
-        if (FileOps::DeletePath(target))
+        if (FileOps::DeletePath(target)) {
           count++;
+          std::lock_guard<std::mutex> lock(m_mutex);
+          for (auto it = state.diffItems.begin(); it != state.diffItems.end(); ++it) {
+            if (it->relativePath == relPath) {
+              if (it->hasRight) {
+                it->hasLeft = false;
+                it->status = DiffStatus::RightOnly;
+              } else {
+                state.diffItems.erase(it);
+              }
+              break;
+            }
+          }
+        }
       }
 
       {
         std::lock_guard<std::mutex> lock(m_mutex);
-        state.statusMessage = "Deleted " + std::to_string(count) + " / " + std::to_string(total) + " items [Local]. Refreshing scan...";
+        state.rootNode = TreeNode::BuildTree(state.diffItems);
+        state.statusMessage = "Deleted " + std::to_string(count) + " / " + std::to_string(total) + " items [Local].";
       }
 
       state.activeOperation = false;
-      StartAsyncCompare(state, true);
+      state.isScanning = false;
     }).detach();
   }
 
@@ -478,17 +512,31 @@ private:
           state.statusMessage = "[DELETING REMOTE] (" + std::to_string(count + 1) + "/" + std::to_string(total) + "): " + narrowRel;
         }
 
-        if (NetworkClient::RequestRemoteDelete(ip, remoteRootStr, relPath))
+        if (NetworkClient::RequestRemoteDelete(ip, remoteRootStr, relPath)) {
           count++;
+          std::lock_guard<std::mutex> lock(m_mutex);
+          for (auto it = state.diffItems.begin(); it != state.diffItems.end(); ++it) {
+            if (it->relativePath == relPath) {
+              if (it->hasLeft) {
+                it->hasRight = false;
+                it->status = DiffStatus::LeftOnly;
+              } else {
+                state.diffItems.erase(it);
+              }
+              break;
+            }
+          }
+        }
       }
 
       {
         std::lock_guard<std::mutex> lock(m_mutex);
-        state.statusMessage = "Deleted " + std::to_string(count) + " / " + std::to_string(total) + " items [Remote]. Refreshing scan...";
+        state.rootNode = TreeNode::BuildTree(state.diffItems);
+        state.statusMessage = "Deleted " + std::to_string(count) + " / " + std::to_string(total) + " items [Remote].";
       }
 
       state.activeOperation = false;
-      StartAsyncCompare(state, true);
+      state.isScanning = false;
     }).detach();
   }
 
@@ -569,8 +617,7 @@ private:
         ImGui::SameLine();
       }
 
-      std::string tagStr = child->isDirectory ? "[DIR] " : "[FILE] ";
-      std::string label = tagStr + nameStr;
+      std::string label = nameStr;
 
       ImGuiTreeNodeFlags flags =
           ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_OpenOnArrow;
@@ -740,12 +787,6 @@ private:
                              ImGuiWindowFlags_NoSavedSettings;
     ImGui::Begin("BestCompare Controls", NULL, flags);
 
-    ImGui::TextColored(
-        ImVec4(0.40f, 0.75f, 1.00f, 1.00f),
-        "BestCompare v%.2f - High Performance Dual-PC Folder Compare", AppVersion);
-    ImGui::Separator();
-    ImGui::Spacing();
-
     ImGui::Columns(2, "ConfigColumns", false);
     ImGui::SetColumnWidth(0, viewport->WorkSize.x * 0.48f);
 
@@ -863,7 +904,7 @@ private:
         ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
         ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY |
         ImGuiTableFlags_SizingFixedFit;
-    float tableHeight = viewport->WorkSize.y - 260.0f;
+    float tableHeight = viewport->WorkSize.y - 225.0f;
 
     if (ImGui::BeginTable("DiffTreeTable", 4, tableFlags,
                           ImVec2(0.0f, tableHeight))) {
